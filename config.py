@@ -1,9 +1,16 @@
-img_path = './image/image'  # 文件路径
-crack_direction = 3  # 上下左右 默认右
+import configparser
 
-img_time = ''  # min/张
-cycle = ''  # 圈/min
+config = configparser.ConfigParser()
 
-alarm_time = ''  # min
-alarm_min_distance = ''  # μm
-alarm_max_distance = ''  # μm
+config.read('./config.ini')
+
+img_path = ''
+crack_direction = ''
+img_time = ''
+cycle = ''
+
+alarm_time = ''
+alarm_min_distance = ''
+alarm_max_distance = ''
+
+# todo 全局config怎么用？
