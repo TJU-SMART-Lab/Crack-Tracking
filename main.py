@@ -6,45 +6,75 @@ import tkinter as tk
 from tkinter import filedialog
 from matplotlib import pyplot as plt
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageTk
 from model.my_unet_model import my_unet
 from utils.visual import show_plot
 from utils.tip import find_tip
 from config import *
+from utils.tcpip import tcpIp
+
 
 # os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 working_status = 0
+tips = []
+times_up = 0
+times_right = 0
 
 
-def refresh_config():
-    global img_path, crack_direction, img_time, cycle, alarm_time, alarm_min_distance, alarm_max_distance
-    img_path = config['DEFAULT']['img_path']  # 文件路径
-    crack_direction = config['DEFAULT']['crack_direction']  # 上下左右 默认右
-    img_time = config['DEFAULT']['img_time']  # min/张
-    cycle = config['DEFAULT']['cycle']  # 圈/min
+def correct():
+    def corr_start():
+        corr_start.destroy()
+        T = threading.Thread(target=lambda: watching(2))
+        T.setDaemon(True)
+        T.start()
 
-    alarm_time = config['alarm']['alarm_time']  # min
-    alarm_min_distance = config['alarm']['alarm_min_distance']  # μm
-    alarm_max_distance = config['alarm']['alarm_max_distance']  # μm
+        def confirm():
+            global times_up, times_right
+            times_up = (tips[1][0]-tips[0][0])/(0-up_.get())
+            times_right = (tips[1][1]-tips[0][1])/right_.get()
+            print(times_up, times_right)
+            config.set('Correction', 'times_up', times_up.get())
+            config.set('Correction', 'times_right', times_right.get())
+            config.set('Correction', 'last_corr', time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+            btn_start['state'] = "normal"
+            corr_win.destroy()
+
+        right_ = tk.DoubleVar()
+        up_ = tk.DoubleVar()
+        e1 = tk.Entry(corr_win, textvariable=right_, show=None, font=('Arial', 14))  # 显示成明文形式
+        e1.grid()
+        e2 = tk.Entry(corr_win, textvariable=up_, show=None, font=('Arial', 14))  # 显示成明文形式
+        e2.grid()
+        corr_finis = tk.Button(corr_win, text="完成", command=confirm)
+        corr_finis.grid()
+
+    corr_win = tk.Toplevel(window)
+    corr_win.geometry('600x400')
+    corr_win.title("校准")
+    corr_start = tk.Button(corr_win, text="开始校准", command=corr_start)
+    corr_start.grid()
 
 
-def main():
-    path_to_watch = img_path
+def watching(limit):
+    global tips
+    count = 0
+    path_to_watch = config.get("DEFAULT", "img_path")
     before = dict([(f, None) for f in os.listdir(path_to_watch)])
     model = my_unet((512, 512, 1))
     model.load_weights("model/1608616054_3250.hdf5")
-    while working_status == 1:
+    while 1:
         time.sleep(1)
         after = dict([(f, None) for f in os.listdir(path_to_watch)])
         added = [f for f in after if f not in before]
         removed = [f for f in before if f not in after]
         before = after
         if added:
-            image_path = img_path + "/" + added[0]
-            l = tk.Label(window, text='你好！this is Tkinter', bg='green', font=('Arial', 12), width=30, height=2)
-            l.grid()
+            image_path = config.get("DEFAULT", "img_path") + "/" + added[0]
+            # image = Image.open(image_path)
+            # Photo = ImageTk.PhotoImage(image)
+            # Lab['image'] = Photo
             task_temp = "./image/mask/" + added[0] + "_mask.png"
             img = Image.open(image_path).convert('L')
             img = img.resize((512, 512), Image.ANTIALIAS)
@@ -55,12 +85,24 @@ def main():
             plt.axis(False)
             plt.savefig(task_temp, bbox_inches='tight', pad_inches=0)
             gray = cv2.imread(task_temp)
-            tip = find_tip(gray)
+            tip = find_tip(gray, config.get("DEFAULT", "crack_direction"))
+            tips.append(tip)
+            count += 1
             print(tip)
 
             if os.path.exists(task_temp):
                 os.remove(task_temp)
             # show_plot(X_predict, result, result, "./image/mask/" + added[0] + "_mask.png")
+        if limit == 'inf':
+            if added:
+                x = (256-tips[-1][1])/times_right
+                y = (tips[-1][0]-256)/times_up
+                tcpIp(x, y)
+            if working_status == 0:
+                break
+        else:
+            if count >= limit:
+                break
     print("stop")
     return
 
@@ -68,9 +110,12 @@ def main():
 def start():
     global working_status
     if working_status == 0:
-        refresh_config()
+        # refresh_config()
         working_status = 1
-        T = threading.Thread(target=main)
+        btn_start['state'] = 'disabled'
+        btn_stop['state'] = 'normal'
+        btn_set['state'] = 'disabled'
+        T = threading.Thread(target=lambda: watching('inf'))
         T.setDaemon(True)
         T.start()
 
@@ -78,55 +123,57 @@ def start():
 def stop():
     global working_status
     working_status = 0
+    btn_start['state'] = 'normal'
+    btn_stop['state'] = 'disabled'
+    btn_set['state'] = 'normal'
 
 
 def settings():
-    img_path_ = tk.StringVar()
-    img_path_.set(img_path)
-    direction_ = tk.StringVar()
-    direction_.set(crack_direction)
-    img_time_ = tk.StringVar()
-    img_time_.set(img_time)
+    img_path = tk.StringVar()
+    img_path.set(config.get("DEFAULT", "img_path"))
+    direction = tk.StringVar()
+    direction.set(config.get("DEFAULT", "crack_direction"))
+    img_time = tk.StringVar()
+    img_time.set(config.get("DEFAULT", "img_time"))
     cycle_ = tk.StringVar()
-    cycle_.set(cycle)
-    alarm_time_ = tk.StringVar()
-    alarm_time_.set(alarm_time)
-    alarm_min_distance_ = tk.StringVar()
-    alarm_min_distance_.set(alarm_min_distance)
-    alarm_max_distance_ = tk.StringVar()
-    alarm_max_distance_.set(alarm_max_distance)
+    cycle_.set(config.get("DEFAULT", "cycle"))
+    alarm_time = tk.StringVar()
+    alarm_time.set(config.get("alarm", "alarm_time"))
+    alarm_min_distance = tk.StringVar()
+    alarm_min_distance.set(config.get("alarm", "alarm_min_distance"))
+    alarm_max_distance = tk.StringVar()
+    alarm_max_distance.set(config.get("alarm", "alarm_max_distance"))
 
     def file():
         f = tk.filedialog.askdirectory()
-        img_path_.set(f)
+        img_path.set(f)
 
     def settings_save():
-        config.set('DEFAULT', 'img_path', img_path_.get())
-        config.set('DEFAULT', 'crack_direction', direction_.get())
-        config.set('DEFAULT', 'img_time', img_time_.get())
+        config.set('DEFAULT', 'img_path', img_path.get())
+        config.set('DEFAULT', 'crack_direction', direction.get())
+        config.set('DEFAULT', 'img_time', img_time.get())
         config.set('DEFAULT', 'cycle', cycle_.get())
-        config.set('alarm', 'alarm_time', alarm_time_.get())
-        config.set('alarm', 'alarm_min_distance', alarm_min_distance_.get())
-        config.set('alarm', 'alarm_max_distance', alarm_max_distance_.get())
+        config.set('alarm', 'alarm_time', alarm_time.get())
+        config.set('alarm', 'alarm_min_distance', alarm_min_distance.get())
+        config.set('alarm', 'alarm_max_distance', alarm_max_distance.get())
         with open('./config.ini', 'w') as ini:
             config.write(ini)
-        refresh_config()
         setting.destroy()
 
     setting = tk.Toplevel(window)
     setting.geometry('600x400')
     setting.title("设置")
-    e1 = tk.Entry(setting, textvariable=img_path_, show=None, font=('Arial', 14))  # 显示成明文形式
-    e1.grid()
+    e_img = tk.Entry(setting, textvariable=img_path, show=None, font=('Arial', 14))  # 显示成明文形式
+    e_img.grid()
     b1 = tk.Button(setting, text="选择", command=file)
     b1.grid()
-    r1 = tk.Radiobutton(setting, text='上', variable=direction_, value='0')
+    r1 = tk.Radiobutton(setting, text='上', variable=direction, value='0')
     r1.grid()
-    r2 = tk.Radiobutton(setting, text='下', variable=direction_, value='1')
+    r2 = tk.Radiobutton(setting, text='下', variable=direction, value='1')
     r2.grid()
-    r3 = tk.Radiobutton(setting, text='左', variable=direction_, value='2')
+    r3 = tk.Radiobutton(setting, text='左', variable=direction, value='2')
     r3.grid()
-    r4 = tk.Radiobutton(setting, text='右', variable=direction_, value='3')
+    r4 = tk.Radiobutton(setting, text='右', variable=direction, value='3')
     r4.grid()
     # s1 = tk.Spinbox(setting, values=([h for h in range(10)]))
     # s1.grid()
@@ -135,14 +182,23 @@ def settings():
 
 
 if __name__ == '__main__':
-    refresh_config()
+    config = Config()
     window = tk.Tk()
     window.title('裂纹追踪系统 v0.01')
-    window.geometry('500x300')
-    btn = tk.Button(window, text="开始", command=start)
-    btn.grid()
-    btn = tk.Button(window, text="结束", command=stop)
-    btn.grid()
-    btn = tk.Button(window, text="设置", command=settings)
-    btn.grid()
+    window.geometry('1000x600')
+    btn_start = tk.Button(window, text="开始", state='disabled', command=start)
+    btn_start.grid()
+    if config.get('Correction', 'last_corr'):
+        btn_start['state'] = 'normal'
+    btn_stop = tk.Button(window, text="结束", state='disabled', command=stop)
+    btn_stop.grid()
+    btn_set = tk.Button(window, text="设置", command=settings)
+    btn_set.grid()
+    btn_corr = tk.Button(window, text="校准", command=correct)
+    btn_corr.grid()
+    # image = Image.open(None)
+    # Photo = ImageTk.PhotoImage(image)
+    # Lab = tk.Label(window, image=Photo)
+    # Lab.grid()
+
     window.mainloop()
