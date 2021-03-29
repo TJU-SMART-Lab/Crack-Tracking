@@ -1,5 +1,4 @@
 import cv2
-from config import *
 import numpy as np
 
 
@@ -26,5 +25,5 @@ def find_tip(img, crack_direction):
 
 
 if __name__ == "__main__":
-    gray = cv2.imread("./mask_test.png")
-    # print(find_tip(gray))
+    gray = cv2.imread("./20200513-000302-864.jpg")
+    print(find_tip(gray, 3))

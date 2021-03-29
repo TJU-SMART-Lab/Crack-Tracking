@@ -1,4 +1,4 @@
-from keras.models import *
+from keras.models import Model
 from keras.layers import *
 from keras import backend as K
 
@@ -188,5 +188,5 @@ def transpose_conv_block(x, filters, kernel_size, activation="relu", padding="sa
 
 if __name__ == "__main__":
     model = my_unet()
-    model.summary()
+    # model.summary()
     # plot_model(model, to_file="12345.png", show_shapes=True)

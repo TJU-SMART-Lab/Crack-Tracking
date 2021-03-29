@@ -3,16 +3,14 @@ import threading
 import time
 import cv2
 import tkinter as tk
+import numpy as np
 from tkinter import filedialog
 from matplotlib import pyplot as plt
-import numpy as np
 from PIL import Image, ImageTk
 from model.my_unet_model import my_unet
-from utils.visual import show_plot
 from utils.tip import find_tip
 from config import *
 from utils.tcpip import tcpIp
-
 
 # os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
@@ -25,6 +23,7 @@ times_right = 0
 
 def correct():
     def corr_start():
+        tips.clear()
         corr_start.destroy()
         T = threading.Thread(target=lambda: watching(2))
         T.setDaemon(True)
@@ -32,20 +31,20 @@ def correct():
 
         def confirm():
             global times_up, times_right
-            times_up = (tips[1][0]-tips[0][0])/(0-up_.get())
-            times_right = (tips[1][1]-tips[0][1])/right_.get()
+            times_up = (tips[1][1] - tips[0][1]) / (0 - up_.get())
+            times_right = (tips[1][0] - tips[0][0]) / right_.get()
             print(times_up, times_right)
-            config.set('Correction', 'times_up', times_up.get())
-            config.set('Correction', 'times_right', times_right.get())
+            config.set('Correction', 'times_up', str(times_up))
+            config.set('Correction', 'times_right', str(times_right))
             config.set('Correction', 'last_corr', time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
             btn_start['state'] = "normal"
             corr_win.destroy()
 
         right_ = tk.DoubleVar()
         up_ = tk.DoubleVar()
-        e1 = tk.Entry(corr_win, textvariable=right_, show=None, font=('Arial', 14))  # 显示成明文形式
+        e1 = tk.Entry(corr_win, textvariable=right_, show=None, font=('Arial', 14))
         e1.grid()
-        e2 = tk.Entry(corr_win, textvariable=up_, show=None, font=('Arial', 14))  # 显示成明文形式
+        e2 = tk.Entry(corr_win, textvariable=up_, show=None, font=('Arial', 14))    # up_=向上移动距离 right_=向右移动距离
         e2.grid()
         corr_finis = tk.Button(corr_win, text="完成", command=confirm)
         corr_finis.grid()
@@ -53,6 +52,7 @@ def correct():
     corr_win = tk.Toplevel(window)
     corr_win.geometry('600x400')
     corr_win.title("校准")
+    corr_win.grab_set()
     corr_start = tk.Button(corr_win, text="开始校准", command=corr_start)
     corr_start.grid()
 
@@ -60,6 +60,8 @@ def correct():
 def watching(limit):
     global tips
     count = 0
+    x_Acc = 0  # 累计移动，绝对值
+    y_Acc = 0
     path_to_watch = config.get("DEFAULT", "img_path")
     before = dict([(f, None) for f in os.listdir(path_to_watch)])
     model = my_unet((512, 512, 1))
@@ -95,15 +97,16 @@ def watching(limit):
             # show_plot(X_predict, result, result, "./image/mask/" + added[0] + "_mask.png")
         if limit == 'inf':
             if added:
-                x = (256-tips[-1][1])/times_right
-                y = (tips[-1][0]-256)/times_up
-                tcpIp(x, y)
+                x = (256 - tips[-1][0]) / times_right
+                y = (tips[-1][1] - 256) / times_up
+                x_Acc += x
+                y_Acc += y
+                tcpIp(x_Acc, y_Acc)
             if working_status == 0:
                 break
         else:
             if count >= limit:
                 break
-    print("stop")
     return
 
 
@@ -163,13 +166,14 @@ def settings():
     setting = tk.Toplevel(window)
     setting.geometry('600x400')
     setting.title("设置")
+    setting.grab_set()
     e_img = tk.Entry(setting, textvariable=img_path, show=None, font=('Arial', 14))  # 显示成明文形式
     e_img.grid()
     b1 = tk.Button(setting, text="选择", command=file)
     b1.grid()
-    r1 = tk.Radiobutton(setting, text='上', variable=direction, value='0')
+    r1 = tk.Radiobutton(setting, text='上', variable=direction, value='0', state='disable')
     r1.grid()
-    r2 = tk.Radiobutton(setting, text='下', variable=direction, value='1')
+    r2 = tk.Radiobutton(setting, text='下', variable=direction, value='1', state='disable')
     r2.grid()
     r3 = tk.Radiobutton(setting, text='左', variable=direction, value='2')
     r3.grid()
