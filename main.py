@@ -38,6 +38,8 @@ def correct():
             config.set('Correction', 'times_right', str(times_right))
             config.set('Correction', 'last_corr', time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
             btn_start['state'] = "normal"
+            with open('./config.ini', 'w') as ini:
+                config.write(ini)
             corr_win.destroy()
 
         right_ = tk.DoubleVar()
@@ -60,8 +62,8 @@ def correct():
 def watching(limit):
     global tips
     count = 0
-    x_Acc = 0  # 累计移动，绝对值
-    y_Acc = 0
+    x_Acc = 0.0  # 累计移动，绝对值
+    y_Acc = 0.0
     path_to_watch = config.get("DEFAULT", "img_path")
     before = dict([(f, None) for f in os.listdir(path_to_watch)])
     model = my_unet((512, 512, 1))
@@ -91,16 +93,18 @@ def watching(limit):
             tips.append(tip)
             count += 1
             print(tip)
+            print(tips)
 
             if os.path.exists(task_temp):
                 os.remove(task_temp)
             # show_plot(X_predict, result, result, "./image/mask/" + added[0] + "_mask.png")
         if limit == 'inf':
             if added:
-                x = (256 - tips[-1][0]) / times_right
-                y = (tips[-1][1] - 256) / times_up
+                x = (tips[-1][0] - 256) / float(config.get('Correction', 'times_right'))
+                y = (256 - tips[-1][1]) / float(config.get('Correction', 'times_up'))
                 x_Acc += x
                 y_Acc += y
+                print(x, y)
                 tcpIp(x_Acc, y_Acc)
             if working_status == 0:
                 break
@@ -118,6 +122,7 @@ def start():
         btn_start['state'] = 'disabled'
         btn_stop['state'] = 'normal'
         btn_set['state'] = 'disabled'
+        btn_corr['state'] = 'disabled'
         T = threading.Thread(target=lambda: watching('inf'))
         T.setDaemon(True)
         T.start()

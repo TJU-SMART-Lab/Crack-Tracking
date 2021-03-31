@@ -18,7 +18,8 @@ def tcpIp(x, y):
         }
     }
     s.send(json.dumps(msg).encode())  # 发送数据
-    time.sleep(0.1)
+    print(msg)
+    time.sleep(0.5)
     s.close()
 
 
