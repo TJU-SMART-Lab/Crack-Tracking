@@ -22,3 +22,4 @@
 
 ## v0.02
 第一个release上线啦！！
+添加了requirements
