@@ -2,20 +2,22 @@ import os
 import sys
 import threading
 import time
-import objgraph
 import tkinter as tk
 from tkinter import filedialog
 
 import cv2
+import matplotlib
 import numpy as np
 from PIL import Image
-from matplotlib import pyplot as plt
-
 from config import *
 from logger import logger
 from model.my_unet_model import my_unet
 from utils.tcpip import tcpIp
 from utils.tip import find_tip
+
+matplotlib.use('Agg')
+
+from matplotlib import pyplot as plt
 
 # os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
@@ -25,7 +27,6 @@ tips = []
 tip = (256, 256)
 times_up = 0
 times_right = 0
-fError = open("except_error.log", 'a')
 
 
 def watching(limit):
@@ -72,13 +73,12 @@ def watching(limit):
                 print(tip)
             except OSError:
                 print('跳过了一张图片')  # 图片有可能无法读取 原因未知
-
-            if count:
-                # gc.collect()  # 强制进行垃圾回收
-                objgraph.show_most_common_types(limit=50)  # 打印出对象数目最多的 50 个类型信息
+            #
+            # if count:
+            #     gc.collect()  # 强制进行垃圾回收
+            #     objgraph.show_most_common_types(limit=50)  # 打印出对象数目最多的 50 个类型信息
             if os.path.exists(task_temp):
                 os.remove(task_temp)
-            # show_plot(X_predict, result, result, "./image/mask/" + added[0] + "_mask.png")
         if limit == 'inf':
             if added:
                 x = (256 - tip[0]) / float(config.get('Correction', 'times_right'))
@@ -119,7 +119,17 @@ class Window(tk.Tk):
         self.btn_stop['state'] = 'normal'
         self.btn_set['state'] = 'disabled'
         self.btn_corr['state'] = 'disabled'
-        T = threading.Thread(target=lambda: watching('inf'))
+        # [time.sleep(0.1) while item in threading.enumerate() if item.name == "watching"]
+        while 1:
+            thread = 0
+            for item in threading.enumerate():
+                if item.name == "watching":
+                    thread = 1
+            if thread == 1:
+                time.sleep(0.1)
+                continue
+            break
+        T = threading.Thread(target=lambda: watching('inf'), name='watching')
         T.setDaemon(True)
         T.start()
 
@@ -158,7 +168,16 @@ class Window(tk.Tk):
         def corr_start(self):
             tips.clear()
             self.corr_start_btn.destroy()
-            T = threading.Thread(target=lambda: self.parent.watching(2))
+            while 1:
+                thread = 0
+                for item in threading.enumerate():
+                    if item.name == "watching":
+                        thread = 1
+                if thread == 1:
+                    time.sleep(0.1)
+                    continue
+                break
+            T = threading.Thread(target=lambda: watching(2), name='watching')
             T.setDaemon(True)
             T.start()
 
@@ -239,10 +258,6 @@ class Window(tk.Tk):
 
 
 def handle_exception(exc_type, exc_value=None, exc_traceback=None):
-    if issubclass(exc_type, KeyboardInterrupt):
-        sys.__excepthook__(exc_type, exc_value, exc_traceback)
-        return
-
     logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
 
 
@@ -260,4 +275,3 @@ if __name__ == '__main__':
     # Lab = tk.Label(window, image=Photo)
     # Lab.grid()
     window.mainloop()
-    fError.close()
